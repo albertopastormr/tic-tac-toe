@@ -9,20 +9,24 @@ def _sigmoid_deriv(z):
 
 class NeuralNet:
 
-    def __init__(self, num_features, num_hidden_layers, num_hidden_nodes, num_labels, th=None,
+    def __init__(self, num_features, num_hidden_nodes, num_labels, th=None,
                             reg_term=0.5, fun=_sigmoid, dfun=_sigmoid_deriv,
                             th_init_low=-0.12, th_init_high=0.12):                    
         self.reg = reg_term
         self.fun = fun
         self.dfun = dfun
         self.num_features = num_features
-        self.num_hidden_layers = num_hidden_layers
+        self.num_hidden_layers = 1
         self.num_hidden_nodes = num_hidden_nodes
         self.num_labels = num_labels
-        self.layers_sizes = [num_features, *num_hidden_nodes, num_labels]
+        self.layers_sizes = list([num_features, num_hidden_nodes, num_labels])
         self.th_init_low = th_init_low
         self.th_init_high = th_init_high
-        self.th = self._initial_thetas() if th is None else th
+
+        if th is None:
+            self._initialize_thetas()
+        else:
+            self.th1, self.th2 = th[0], th[1]
     
     def _random_thetas_layer(self, L_in, L_out):
         """ Construye los pesos de una capa de la red
@@ -31,99 +35,89 @@ class NeuralNet:
         return np.random.uniform(low=self.th_init_low, high=self.th_init_high,
                                                  size=(L_out, L_in+1))
 
-    def _initial_thetas(self):
+    def _initialize_thetas(self):
         """ Construye los pesos de toda la red
         de forma aleatoria
         """
-        temp_th = []
-        for i in range(0, len(self.layers_sizes)-1):
-            l_in = self.layers_sizes[i]
-            l_out = self.layers_sizes[i+1]
-            temp_th.append(self._random_thetas_layer(l_in, l_out))
-        self.th = np.asarray(temp_th)
+        self.th1 = self._random_thetas_layer(self.layers_sizes[0], self.layers_sizes[1])
+        self.th2 = self._random_thetas_layer(self.layers_sizes[1], self.layers_sizes[2])
 
     def _cost(self, y_true, y_pred):
         """ Calcula el coste del modelo utilizando una funcion
         sigmoide
         """
         assert len(y_true) == len(y_pred)
+
         m = len(y_true)
         J = np.sum( -y_true * np.log(y_pred) - (1 - y_true) * np.log(1 - y_pred) ) / m
-        J += (self.reg / (2 * m)) * (np.sum(self.th[:-1, 1:] ** 2)) + np.sum(self.th[-1, 1:] ** 2)
+        J += (self.reg / (2 * m)) * (np.sum(self.th1[:, 1:] ** 2)
+                            + np.sum(self.th2[:, 1:] ** 2))
         return J
 
-    def _backprop(self, X, y):
+    def _backprop(self, params, X, y):
         """ Devuelve el coste y el gradiente de la red asumiendo
         one-hot encoding para 'y'
         """
         m = len(X)
 
         # forward propagation
-        a = [np.insert(X, 0, values=np.ones(m), axis=1)] # a0 = x
-        z = [None] # no hay z0
-        for i in range(1, len(self.layers_sizes)):
-            z.append( np.matmul( a[i-1], self.th[i-1].T))
-            a[i] = np.insert(self.fun(z[i]), 0, values=np.ones(m), axis=1)
-        pred = self.fun(z[-1])
-        
+        a1 = np.insert(X, 0, values=np.ones(m), axis=1)
+        z2 = np.matmul(a1, self.th1.T)
+        a2 = np.insert(self.fun(z2), 0, values=np.ones(m), axis=1)
+        z3 = np.matmul(a2, self.th2.T)
+        pred = self.fun(z3)
+
+        # cost calc
         J = self._cost(y,pred)
         
         # back propagation
-        delta = [pred - y]
-        for i in range(1, len(self.layers_sizes)-1):
-            zs = np.insert(z[-i-1], 0, values=np.ones(m), axis=1)
-            delta.append( np.multiply(np.matmul(delta[i-1], self.th[-i]), self.dfun(zs)))
-        delta = np.asarray(delta)
-
-        delta_ = [ delta[-1-i].T.dot(a[i]) for i in range(0, len(self.layers_sizes) - 1) ]
-        delta_ = np.asarray(delta_)
+        delta3 = pred - y
+        z2s = np.insert(z2, 0, values=np.ones(m), axis=1)
+        delta2 = np.multiply(np.matmul(delta3, self.th2), self.dfun(z2s))
         
-        th_ = [np.c_[np.zeros((self.th[i].shape[0],1)),self.th[i][:,1:]]
-         for i in range(0, len(self.th))]
-        th_ = np.asarray(th_)
-
-        D = [ (delta_[i][1:,:]/m + (th_[i]*self.reg)/m ).ravel() for i in range(0, len(th_))]
-
-        # rolling del gradiente para la salida
-        G = D[0]
-        for i in range(1, len(D)):
-            G = np.r_[G, D[i]]
-
-        return(J, G)
+        delta1_ = delta2.T.dot(a1) 
+        delta2_ = delta3.T.dot(a2) 
+        
+        theta1_ = np.c_[np.zeros((self.th1.shape[0],1)),self.th1[:,1:]]
+        theta2_ = np.c_[np.zeros((self.th2.shape[0],1)),self.th2[:,1:]]
+        
+        D1 = (delta1_[1:,:]/m + (theta1_*self.reg)/m ).ravel()
+        D2 = (delta2_/m + (theta2_*self.reg)/m ).ravel()
+        # rolling de gradient para salida
+        return(J, np.r_[D1, D2])
 
     def fit(self, X, y, maxiter=70):
-        """ Entrena los pesos del modelo utilizando 'fmin_tnc' de 
+        """ Entrena los pesos del modelo utilizando 'minimize' de 
         la libreria 'scipy.optimize'
         """
-        fmin = opt.minimize(fun=self._backprop, x0=self.th, args=(X, y),
+        fmin = opt.minimize(fun=self._backprop, x0=np.append(self.th1, self.th2).reshape(-1), args=(X, y),
                     method='TNC', jac=True, options={'maxiter':maxiter})
-        temp_th = []
-        range_ini, range_end = 0,0
-        for i in range(0, len(self.th)):
-            range_end =  range_end + self.layers_sizes[i+1]*(self.layers_sizes[i]+1) if i+1 < len(self.th) else len(fmin.x)
-            temp_th.append(fmin.x[range_ini:range_end].reshape(self.layers_sizes[i+1],(self.layers_sizes[i]+1)))
-            range_ini = range_end
-        self.th = np.asarray(temp_th)
 
-    def predict(self, X, threshold=0.5):
+        self.th1 = fmin.x[:(self.num_hidden_nodes*(self.num_features+1))].reshape(self.num_hidden_nodes,(self.num_features+1))
+        self.th2 = fmin.x[(self.num_hidden_nodes*(self.num_features+1)):].reshape(self.num_labels,(self.num_hidden_nodes+1))
+
+    def predict(self, X):
         """ Devuelve las predicciones del modelo para los datos
         de 'X' utilizando 'threshold' si el modelo solo
         tiene dos posibles etiquetas
         """
+        m = len(X)
+        X_ones = np.insert(X, 0,values=np.ones(m), axis=1)
         pred = []
-        for x in X:
-            a = [np.insert(x, 0, values=np.ones(1), axis=1)] # a0 = x
-            z = [None] # no hay z0
-            for i in range(1, len(self.layers_sizes)):
-                z.append( np.matmul( a[i-1], self.th[i-1].T))
-                a[i] = np.insert(self.fun(z[i]), 0, values=np.ones(1), axis=1)
-
-            probability_per_label = self.fun(z[-1])
+        for x in X_ones:
+            output_layer1 = np.array([self.fun(self.th1[i].dot(x.T))
+                                  for i in range(0,len(self.th1))])
+            output_layer1 = np.insert(output_layer1, 0, 1)
+            output_layer2 = np.array([self.fun(self.th2[i].dot(output_layer1))
+                                    for i in range(0,len(self.th2))])
+            
+            probability_per_label = output_layer2
             best_probability_prediction_index = np.argmax(probability_per_label)
             prediction = best_probability_prediction_index+1
-        
+            
             pred.append(prediction)
-        return np.asarray(pred)
+
+        return pred
 
     def accuracy_score(self, y_true, y_pred, normalize=True):
         """ Calcula el porcentaje de aciertos del modelo sobre 'y_true'
