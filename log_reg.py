@@ -2,7 +2,7 @@ import numpy as np
 import scipy.optimize as opt
 
 def _sigmoid(z):
-            return 1/(1 + np.e**(-z))
+    return 1/(1 + np.e**(-z))
 
 class LogReg:
 
@@ -19,7 +19,6 @@ class LogReg:
             return np.zeros(self.num_features+1)
         else:
             return np.zeros(self.num_labels, self.num_features+1)
-        return 0
 
     def _cost(self, x, y):
         """ Calcula el coste del modelo utilizando una funcion
