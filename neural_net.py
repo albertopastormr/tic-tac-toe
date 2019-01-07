@@ -56,7 +56,9 @@ class NeuralNet:
 
     def _backprop(self, params, X, y):
         """ Devuelve el coste y el gradiente de la red asumiendo
-        one-hot encoding para 'y'
+        one-hot encoding para 'y'.
+        'params' es un argumento nulo, acoplado a sklearn.optimize,
+        cualquier valor sirve(None), ya que no se utiliza.
         """
         m = len(X)
 
@@ -90,7 +92,11 @@ class NeuralNet:
         """ Entrena los pesos del modelo utilizando 'minimize' de 
         la libreria 'scipy.optimize'
         """
-        fmin = opt.minimize(fun=self._backprop, x0=np.append(self.th1, self.th2).reshape(-1), args=(X, y),
+        m = len(X)
+        ys = np.zeros((m, self.num_labels))
+        for i in range(m):
+            ys[i][y[i]] = 1
+        fmin = opt.minimize(fun=self._backprop, x0=np.append(self.th1, self.th2).reshape(-1), args=(X, ys),
                     method='TNC', jac=True, options={'maxiter':maxiter})
 
         self.th1 = fmin.x[:(self.num_hidden_nodes*(self.num_features+1))].reshape(self.num_hidden_nodes,(self.num_features+1))
@@ -113,7 +119,7 @@ class NeuralNet:
             
             probability_per_label = output_layer2
             best_probability_prediction_index = np.argmax(probability_per_label)
-            prediction = best_probability_prediction_index+1
+            prediction = best_probability_prediction_index
             
             pred.append(prediction)
 

@@ -20,9 +20,11 @@ class LogReg:
         else:
             return np.zeros(self.num_labels, self.num_features+1)
 
-    def _cost(self, x, y):
+    def _cost(self, params, x, y):
         """ Calcula el coste del modelo utilizando una funcion
-        sigmoide
+        sigmoide.
+        'params' es un argumento nulo, acoplado a sklearn.optimize,
+        cualquier valor sirve(None), ya que no se utiliza.
         """
         m = len(x)
         h = self.fun(np.dot(x, self.th))
@@ -32,9 +34,11 @@ class LogReg:
         
         return J                         
 
-    def _gradient(self, x, y):
+    def _gradient(self, params, x, y):
         """ Calcula el gradiente del modelo utilizando una funcion
-        sigmoide
+        sigmoide.
+        'params' es un argumento nulo, acoplado a sklearn.optimize,
+        cualquier valor sirve(None), ya que no se utiliza.
         """ 
         m = len(x)
         cg = (1/m)*x.T.dot(self.fun(np.dot(x, self.th)) - y) + self.th*self.reg/m
@@ -45,22 +49,26 @@ class LogReg:
         Entrena los pesos del modelo utilizando 'fmin_tnc' de 
         la libreria 'scipy.optimize'
         """
+        m = len(X)
+        X_ones = np.insert(X, 0,values=np.ones(m), axis=1)
         if self.num_labels == 2:
             self.th, *_ = opt.fmin_tnc(func=self._cost, x0=self.th, 
-                       fprime=self._gradient, args=(X, y))
+                       fprime=self._gradient, args=(X_ones, y))
         else:
             # equivalente a oneVsAll()
             for i in range(1, self.num_labels + 1):
                 self.th[i], *_  = opt.fmin_tnc(func=self._cost, x0=self.th[i],
-                                    fprime=self._gradient, args=(X, y))
+                                    fprime=self._gradient, args=(X_ones, y))
 
     def predict(self, X, threshold=0.5):
         """ Devuelve las predicciones del modelo para los datos
         de 'X' utilizando 'threshold' si el modelo solo
         tiene dos posibles etiquetas
         """
+        m = len(X)
+        X_ones = np.insert(X, 0,values=np.ones(m), axis=1)
         pred = []
-        for x in X:
+        for x in X_ones:
             if(self.num_labels == 2):
                 prediction = self.fun(self.th.dot(x.T))
                 if(prediction >= threshold):
