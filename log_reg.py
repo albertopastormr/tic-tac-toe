@@ -52,13 +52,15 @@ class LogReg:
         m = len(X)
         X_ones = np.insert(X, 0,values=np.ones(m), axis=1)
         if self.num_labels == 2:
-            self.th, *_ = opt.fmin_tnc(func=self._cost, x0=self.th, 
-                       fprime=self._gradient, args=(X_ones, y))
+            self.th, *ret = opt.fmin_tnc(func=self._cost, x0=self.th, 
+                       fprime=self._gradient, args=(X_ones, y), maxfun=100)
+            print(f'num_func_eval:{ret[0]}')
         else:
             # equivalente a oneVsAll()
             for i in range(1, self.num_labels + 1):
-                self.th[i], *_  = opt.fmin_tnc(func=self._cost, x0=self.th[i],
+                self.th[i], *ret  = opt.fmin_tnc(func=self._cost, x0=self.th[i],
                                     fprime=self._gradient, args=(X_ones, y))
+                print(f'label:{i}, num_func_eval:{ret[0]}')
 
     def predict(self, X, threshold=0.5):
         """ Devuelve las predicciones del modelo para los datos

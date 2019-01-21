@@ -88,7 +88,7 @@ class NeuralNet:
         # rolling de gradient para salida
         return(J, np.r_[D1, D2])
 
-    def fit(self, X, y, maxiter=70):
+    def fit(self, X, y, method='TNC', maxiter=70):
         """ Entrena los pesos del modelo utilizando 'minimize' de 
         la libreria 'scipy.optimize'
         """
@@ -97,7 +97,7 @@ class NeuralNet:
         for i in range(m):
             ys[i][y[i]] = 1
         fmin = opt.minimize(fun=self._backprop, x0=np.append(self.th1, self.th2).reshape(-1), args=(X, ys),
-                    method='TNC', jac=True, options={'maxiter':maxiter})
+                    method=method, jac=True, options={'maxiter':maxiter, 'disp':True})
 
         self.th1 = fmin.x[:(self.num_hidden_nodes*(self.num_features+1))].reshape(self.num_hidden_nodes,(self.num_features+1))
         self.th2 = fmin.x[(self.num_hidden_nodes*(self.num_features+1)):].reshape(self.num_labels,(self.num_hidden_nodes+1))
@@ -123,7 +123,7 @@ class NeuralNet:
             
             pred.append(prediction)
 
-        return pred
+        return np.array(pred)
 
     def accuracy_score(self, y_true, y_pred, normalize=True):
         """ Calcula el porcentaje de aciertos del modelo sobre 'y_true'
